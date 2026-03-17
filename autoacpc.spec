@@ -2,8 +2,8 @@
 """PyInstaller spec for autoacpc standalone binary."""
 
 a = Analysis(
-    ["src/autoacpc/cli.py"],
-    pathex=[],
+    ["entry.py"],
+    pathex=["src"],
     binaries=[],
     datas=[],
     hiddenimports=[
