@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "autoacpc"
+version = "0.1.0"
+description = "Automatically set brain image origin to AC-PC alignment"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Jiaxiang Li" }]
+dependencies = [
+    "nibabel>=5.0",
+    "numpy>=1.24",
+    "SimpleITK>=2.3",
+    "dipy>=1.7",
+    "templateflow>=24.0",
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+autoacpc = "autoacpc.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autoacpc"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
