@@ -10,19 +10,19 @@ autoACPC is a standalone CLI tool that automatically sets brain image origin to 
 
 ```bash
 # Install in editable mode with dev dependencies
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 
 # Run all tests
-pytest
+uv run pytest
 
 # Run a single test
-pytest tests/test_registration.py::test_build_ants_command_contains_expected_flags
+uv run pytest tests/test_registration.py::test_build_ants_command_contains_expected_flags
 
 # Lint
-ruff check src/ tests/
+uv run ruff check src/ tests/
 
 # Format
-ruff format src/ tests/
+uv run ruff format src/ tests/
 ```
 
 ## Architecture

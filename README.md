@@ -21,10 +21,12 @@ This produces an output image whose origin is at AC-PC, with the same anatomical
 ## Installation
 
 ```bash
-pip install .
+# Using uv (recommended)
+uv venv
+uv pip install -e ".[dev]"
 
-# For development:
-pip install -e ".[dev]"
+# Or with pip
+pip install .
 ```
 
 ## Usage
@@ -71,5 +73,5 @@ acpc_align(
 ## Running tests
 
 ```bash
-pytest
+uv run pytest
 ```
