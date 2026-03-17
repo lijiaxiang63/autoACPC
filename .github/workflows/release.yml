@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: autoacpc-linux-x86_64
+          - os: macos-latest
+            artifact: autoacpc-macos-arm64
+          - os: windows-latest
+            artifact: autoacpc-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]" pyinstaller
+
+      - name: Build binary
+        run: pyinstaller autoacpc.spec
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: mv dist/autoacpc dist/${{ matrix.artifact }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: mv dist/autoacpc.exe dist/${{ matrix.artifact }}
+        shell: bash
+
+      - name: Smoke test
+        if: runner.os != 'Windows'
+        run: dist/${{ matrix.artifact }} --help
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: dist/${{ matrix.artifact }} --help
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*

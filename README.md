@@ -14,11 +14,22 @@ This produces an output image whose origin is at AC-PC, with the same anatomical
 
 ## Prerequisites
 
-- **Python** >= 3.10
 - **ANTs** — `antsRegistration` and `antsApplyTransforms` must be on your `PATH`
 - **TemplateFlow** templates are auto-downloaded on first use (or supply your own with `--template-path`)
 
 ## Installation
+
+### Standalone binary
+
+Download the latest binary for your platform from [GitHub Releases](../../releases/latest). No Python installation required.
+
+```bash
+# macOS / Linux
+chmod +x autoacpc-*
+./autoacpc-macos-arm64 input.nii.gz output_acpc.nii.gz
+```
+
+### From source
 
 ```bash
 # Using uv (recommended)
@@ -89,4 +100,12 @@ acpc_align(
 
 ```bash
 uv run pytest
+```
+
+## Building standalone binary locally
+
+```bash
+pip install pyinstaller
+pyinstaller autoacpc.spec
+./dist/autoacpc --help
 ```
