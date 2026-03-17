@@ -35,6 +35,16 @@ from .template import DEFAULT_TEMPLATE
 @click.option("--fast", is_flag=True, help="Use fast (less accurate) registration.")
 @click.option("--work-dir", type=click.Path(), help="Working directory for intermediate files.")
 @click.option("--save-transform", type=click.Path(), help="Save the rigid transform to this path.")
+@click.option(
+    "--template-path",
+    type=click.Path(exists=True),
+    help="Path to a local template image. Bypasses TemplateFlow download.",
+)
+@click.option(
+    "--template-mask",
+    type=click.Path(exists=True),
+    help="Path to a local brain mask. Only used with --template-path.",
+)
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def main(
     input_image: str,
@@ -45,6 +55,8 @@ def main(
     fast: bool,
     work_dir: str | None,
     save_transform: str | None,
+    template_path: str | None,
+    template_mask: str | None,
     verbose: bool,
 ) -> None:
     """Set brain image origin to AC-PC alignment.
@@ -73,6 +85,8 @@ def main(
             fast=fast,
             work_dir=work_dir,
             save_transform=save_transform,
+            template_path=template_path,
+            template_mask=template_mask,
         )
     except FileNotFoundError as e:
         click.echo(f"Error: {e}", err=True)

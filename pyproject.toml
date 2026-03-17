@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "autoacpc"
-version = "0.1.0"
+version = "0.2.0"
 description = "Automatically set brain image origin to AC-PC alignment"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -16,7 +16,7 @@ This produces an output image whose origin is at AC-PC, with the same anatomical
 
 - **Python** >= 3.10
 - **ANTs** — `antsRegistration` and `antsApplyTransforms` must be on your `PATH`
-- **TemplateFlow** templates are auto-downloaded on first use
+- **TemplateFlow** templates are auto-downloaded on first use (or supply your own with `--template-path`)
 
 ## Installation
 
@@ -45,6 +45,11 @@ autoacpc input.nii.gz output_acpc.nii.gz \
 
 # Fast mode (less accurate, useful for testing)
 autoacpc input.nii.gz output_acpc.nii.gz --fast
+
+# Use a local template instead of downloading from TemplateFlow
+autoacpc input.nii.gz output_acpc.nii.gz \
+    --template-path /path/to/template.nii.gz \
+    --template-mask /path/to/brain_mask.nii.gz
 ```
 
 ### Options
@@ -56,6 +61,8 @@ autoacpc input.nii.gz output_acpc.nii.gz --fast
 | `--interpolation` | `LanczosWindowedSinc` | Resampling interpolation method |
 | `--fast` | off | Use fast registration (fewer iterations) |
 | `--work-dir` | temp dir | Directory for intermediate files |
+| `--template-path` | — | Path to a local template image (bypasses TemplateFlow) |
+| `--template-mask` | — | Path to a local brain mask (use with `--template-path`) |
 | `--save-transform` | — | Save the rigid transform file |
 | `-v, --verbose` | off | Enable debug logging |
 
@@ -67,6 +74,14 @@ from autoacpc.pipeline import acpc_align
 acpc_align(
     input_image="sub-01_T1w.nii.gz",
     output_image="sub-01_T1w_acpc.nii.gz",
+)
+
+# With a local template
+acpc_align(
+    input_image="sub-01_T1w.nii.gz",
+    output_image="sub-01_T1w_acpc.nii.gz",
+    template_path="/path/to/template.nii.gz",
+    template_mask="/path/to/brain_mask.nii.gz",
 )
 ```
 

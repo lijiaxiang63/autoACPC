@@ -21,6 +21,8 @@ def acpc_align(
     fast: bool = False,
     work_dir: str | None = None,
     save_transform: str | None = None,
+    template_path: str | None = None,
+    template_mask: str | None = None,
 ) -> str:
     """Run the full AC-PC alignment pipeline.
 
@@ -39,6 +41,8 @@ def acpc_align(
         fast: Use fast (less accurate) registration settings.
         work_dir: Working directory for intermediate files. Uses a temp dir if None.
         save_transform: If set, save the rigid transform to this path.
+        template_path: Path to a local template image. Skips TemplateFlow when set.
+        template_mask: Path to a local brain mask. Only used with template_path.
 
     Returns:
         Path to the output AC-PC aligned image.
@@ -67,13 +71,26 @@ def acpc_align(
         Path(work_dir).mkdir(parents=True, exist_ok=True)
 
     try:
-        # Step 1: Fetch template
-        logger.info("Fetching template: %s (%s)", template, modality)
-        template_path, mask_path = get_template(
-            output_dir=work_dir,
-            template_name=template,
-            modality=modality,
-        )
+        # Step 1: Get template (local path or TemplateFlow)
+        if template_path is not None:
+            tp = Path(template_path).resolve()
+            if not tp.exists():
+                raise FileNotFoundError(f"Template image not found: {tp}")
+            template_path = str(tp)
+            mask_path = None
+            if template_mask is not None:
+                mp = Path(template_mask).resolve()
+                if not mp.exists():
+                    raise FileNotFoundError(f"Template mask not found: {mp}")
+                mask_path = str(mp)
+            logger.info("Using local template: %s", template_path)
+        else:
+            logger.info("Fetching template: %s (%s)", template, modality)
+            template_path, mask_path = get_template(
+                output_dir=work_dir,
+                template_name=template,
+                modality=modality,
+            )
 
         # Step 2: Register to template
         affine_path = run_registration(

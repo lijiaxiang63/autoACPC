@@ -29,7 +29,7 @@ uv run ruff format src/ tests/
 
 The pipeline has three stages, each in its own module:
 
-1. **`template.py`** — Fetches standard template + brain mask from TemplateFlow
+1. **`template.py`** — Fetches standard template + brain mask from TemplateFlow (skipped when a local template path is provided)
 2. **`registration.py`** — Runs ANTs registration (Similarity + Affine), then decomposes the affine into a 6-DOF rigid transform using SimpleITK + dipy geometry
 3. **`pipeline.py`** — Orchestrates the full flow: fetch template → register → extract rigid → apply transform
 
@@ -42,7 +42,7 @@ The rigid extraction (`affine_to_rigid`) decomposes the ANTs affine matrix using
 ## External dependencies
 
 - **ANTs**: `antsRegistration` and `antsApplyTransforms` must be on `PATH`
-- **TemplateFlow**: Templates auto-download on first use; default is `MNI152NLin2009cAsym`
+- **TemplateFlow**: Templates auto-download on first use; default is `MNI152NLin2009cAsym`. Can be bypassed with `--template-path` to use a local template
 
 ## Project layout
 
