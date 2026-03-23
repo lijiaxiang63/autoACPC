@@ -10,6 +10,7 @@ import logging
 import subprocess
 from pathlib import Path
 
+import nibabel as nb
 import numpy as np
 import SimpleITK as sitk
 from dipy.core import geometry as geom
@@ -184,6 +185,75 @@ def affine_to_rigid(transform_file: str, output_dir: str) -> tuple[str, str]:
 
     logger.info("Rigid transform extracted: %s", rigid_path)
     return rigid_path, inverse_path
+
+
+def apply_transform_to_header(
+    input_image: str,
+    inverse_transform: str,
+    output_image: str,
+) -> str:
+    """Apply a rigid transform by modifying the NIfTI header affine.
+
+    Instead of resampling, this composes the inverse rigid transform with
+    the existing sform/qform so that downstream tools see AC-PC aligned
+    coordinates while the voxel data stays untouched.
+
+    Args:
+        input_image: Path to input NIfTI image.
+        inverse_transform: Path to the *inverse* rigid ITK transform (.mat).
+        output_image: Path for the output image with modified header.
+
+    Returns:
+        Path to the output image.
+    """
+    # Load the inverse rigid transform (maps input space → template space)
+    raw = sitk.ReadTransform(inverse_transform)
+    rigid = sitk.Euler3DTransform()
+    rigid.SetFixedParameters(raw.GetFixedParameters())
+    rigid.SetParameters(raw.GetParameters())
+
+    # Build 4x4 matrix in ITK (LPS) space
+    rot_3x3 = np.array(rigid.GetMatrix()).reshape((3, 3), order="C")
+    center = np.array(rigid.GetFixedParameters()[:3])
+    translation = np.array(rigid.GetTranslation())
+    # ITK applies: y = R*(x - center) + center + t  →  y = R*x + (center - R*center + t)
+    offset = center - rot_3x3 @ center + translation
+
+    lps_matrix = np.eye(4)
+    lps_matrix[:3, :3] = rot_3x3
+    lps_matrix[:3, 3] = offset
+
+    # Convert LPS → RAS: flip x and y axes
+    lps2ras = np.diag([-1.0, -1.0, 1.0, 1.0])
+    ras_matrix = lps2ras @ lps_matrix @ lps2ras
+
+    # Compose with existing NIfTI affine
+    img = nb.load(str(input_image))
+    new_affine = ras_matrix @ img.affine
+
+    # Preserve on-disk voxel storage and NIfTI scaling exactly. Using
+    # np.asarray(img.dataobj) would materialize scaled values and trigger
+    # re-quantization on save for images with scl_slope/scl_inter.
+    header = img.header.copy()
+    dataobj = img.dataobj
+    if hasattr(dataobj, "get_unscaled"):
+        data = dataobj.get_unscaled()
+        slope = dataobj.slope
+        intercept = dataobj.inter
+    else:
+        data = np.asanyarray(dataobj)
+        slope = None
+        intercept = None
+
+    out = nb.Nifti1Image(data, new_affine, header, extra=img.extra.copy())
+    if slope is not None and intercept is not None:
+        out.header.set_slope_inter(slope, intercept)
+    out.set_sform(new_affine)
+    out.set_qform(new_affine)
+    nb.save(out, str(output_image))
+
+    logger.info("Header-only transform applied. Output: %s", output_image)
+    return output_image
 
 
 def apply_transform(

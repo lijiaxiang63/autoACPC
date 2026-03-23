@@ -34,7 +34,11 @@ from .template import DEFAULT_TEMPLATE
 )
 @click.option("--fast", is_flag=True, help="Use fast (less accurate) registration.")
 @click.option("--work-dir", type=click.Path(), help="Working directory for intermediate files.")
-@click.option("--save-transform", type=click.Path(), help="Save the rigid transform to this path.")
+@click.option(
+    "--save-transform",
+    type=click.Path(),
+    help="Save the rigid transform used for the output image to this path.",
+)
 @click.option(
     "--template-path",
     type=click.Path(exists=True),
@@ -44,6 +48,11 @@ from .template import DEFAULT_TEMPLATE
     "--template-mask",
     type=click.Path(exists=True),
     help="Path to a local brain mask. Only used with --template-path.",
+)
+@click.option(
+    "--header-only",
+    is_flag=True,
+    help="Modify NIfTI header affine instead of resampling. Preserves original voxel data.",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def main(
@@ -57,6 +66,7 @@ def main(
     save_transform: str | None,
     template_path: str | None,
     template_mask: str | None,
+    header_only: bool,
     verbose: bool,
 ) -> None:
     """Set brain image origin to AC-PC alignment.
@@ -64,8 +74,8 @@ def main(
     Takes an INPUT_IMAGE (NIfTI) and writes the AC-PC aligned result to OUTPUT_IMAGE.
 
     The algorithm registers the input to a standard template using ANTs,
-    extracts the rigid (6-DOF) component, and resamples the input into
-    AC-PC aligned space.
+    extracts the rigid (6-DOF) component, and writes AC-PC aligned output
+    by resampling or, with --header-only, by updating the NIfTI affine.
 
     Requires ANTs (antsRegistration, antsApplyTransforms) to be installed
     and available on PATH.
@@ -87,6 +97,7 @@ def main(
             save_transform=save_transform,
             template_path=template_path,
             template_mask=template_mask,
+            header_only=header_only,
         )
     except FileNotFoundError as e:
         click.echo(f"Error: {e}", err=True)

@@ -8,7 +8,7 @@ The algorithm (based on [QSIPrep](https://qsiprep.readthedocs.io/)):
 
 1. **Template registration** — Registers the input brain image to a standard template (default: MNI152NLin2009cAsym) using ANTs with a two-stage strategy (Similarity + Affine).
 2. **Rigid extraction** — Decomposes the full affine transform to extract only the 6-DOF rigid component (rotation + translation), discarding scaling and shearing.
-3. **Resampling** — Applies the rigid transform to resample the input image into AC-PC aligned space.
+3. **Apply transform** — Either resamples the image into AC-PC aligned space (default) or modifies the NIfTI header affine to update world coordinates while preserving the original voxel data (`--header-only`).
 
 This produces an output image whose origin is at AC-PC, with the same anatomical content as the input (no nonlinear warping).
 
@@ -62,6 +62,9 @@ autoacpc input.nii.gz output_acpc.nii.gz \
 # Fast mode (less accurate, useful for testing)
 autoacpc input.nii.gz output_acpc.nii.gz --fast
 
+# Header-only mode (update affine, no resampling — preserves voxel data)
+autoacpc input.nii.gz output_acpc.nii.gz --header-only
+
 # Use a local template instead of downloading from TemplateFlow
 autoacpc input.nii.gz output_acpc.nii.gz \
     --template-path /path/to/template.nii.gz \
@@ -79,6 +82,7 @@ autoacpc input.nii.gz output_acpc.nii.gz \
 | `--work-dir` | temp dir | Directory for intermediate files |
 | `--template-path` | — | Path to a local template image (bypasses TemplateFlow) |
 | `--template-mask` | — | Path to a local brain mask (use with `--template-path`) |
+| `--header-only` | off | Modify NIfTI header affine instead of resampling (preserves voxel data) |
 | `--save-transform` | — | Save the rigid transform file |
 | `-v, --verbose` | off | Enable debug logging |
 
@@ -90,6 +94,13 @@ from autoacpc.pipeline import acpc_align
 acpc_align(
     input_image="sub-01_T1w.nii.gz",
     output_image="sub-01_T1w_acpc.nii.gz",
+)
+
+# Header-only mode
+acpc_align(
+    input_image="sub-01_T1w.nii.gz",
+    output_image="sub-01_T1w_acpc.nii.gz",
+    header_only=True,
 )
 
 # With a local template

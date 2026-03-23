@@ -30,8 +30,8 @@ uv run ruff format src/ tests/
 The pipeline has three stages, each in its own module:
 
 1. **`template.py`** — Fetches standard template + brain mask from TemplateFlow (skipped when a local template path is provided)
-2. **`registration.py`** — Runs ANTs registration (Similarity + Affine), then decomposes the affine into a 6-DOF rigid transform using SimpleITK + dipy geometry
-3. **`pipeline.py`** — Orchestrates the full flow: fetch template → register → extract rigid → apply transform
+2. **`registration.py`** — Runs ANTs registration (Similarity + Affine), then decomposes the affine into a 6-DOF rigid transform using SimpleITK + dipy geometry. Also provides `apply_transform_to_header` for header-only mode (modifies NIfTI affine instead of resampling).
+3. **`pipeline.py`** — Orchestrates the full flow: fetch template → register → extract rigid → apply transform (resampling or header-only)
 
 **`cli.py`** is a thin Click wrapper around `pipeline.acpc_align()`.
 

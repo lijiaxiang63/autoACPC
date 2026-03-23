@@ -6,7 +6,12 @@ from pathlib import Path
 
 import nibabel as nb
 
-from .registration import affine_to_rigid, apply_transform, run_registration
+from .registration import (
+    affine_to_rigid,
+    apply_transform,
+    apply_transform_to_header,
+    run_registration,
+)
 from .template import DEFAULT_TEMPLATE, get_template
 
 logger = logging.getLogger(__name__)
@@ -23,6 +28,7 @@ def acpc_align(
     save_transform: str | None = None,
     template_path: str | None = None,
     template_mask: str | None = None,
+    header_only: bool = False,
 ) -> str:
     """Run the full AC-PC alignment pipeline.
 
@@ -30,7 +36,7 @@ def acpc_align(
         1. Fetch standard template from TemplateFlow
         2. Register input to template (Similarity + Affine via ANTs)
         3. Extract rigid (6-DOF) transform from the affine
-        4. Apply rigid transform to resample input into AC-PC space
+        4. Apply the rigid transform to the output grid or NIfTI header
 
     Args:
         input_image: Path to input NIfTI image.
@@ -40,9 +46,11 @@ def acpc_align(
         interpolation: Interpolation method for resampling.
         fast: Use fast (less accurate) registration settings.
         work_dir: Working directory for intermediate files. Uses a temp dir if None.
-        save_transform: If set, save the rigid transform to this path.
+        save_transform: If set, save the rigid transform used for the output
+            image to this path.
         template_path: Path to a local template image. Skips TemplateFlow when set.
         template_mask: Path to a local brain mask. Only used with template_path.
+        header_only: If True, modify the NIfTI header affine instead of resampling.
 
     Returns:
         Path to the output AC-PC aligned image.
@@ -107,17 +115,25 @@ def acpc_align(
         if save_transform:
             import shutil
 
-            shutil.copy(rigid_path, save_transform)
-            logger.info("Rigid transform saved to: %s", save_transform)
+            transform_to_save = inverse_path if header_only else rigid_path
+            shutil.copy(transform_to_save, save_transform)
+            logger.info("Transform saved to: %s", save_transform)
 
         # Step 4: Apply rigid transform
-        apply_transform(
-            input_image=str(input_path),
-            reference_image=template_path,
-            transform=rigid_path,
-            output_image=str(output_path),
-            interpolation=interpolation,
-        )
+        if header_only:
+            apply_transform_to_header(
+                input_image=str(input_path),
+                inverse_transform=inverse_path,
+                output_image=str(output_path),
+            )
+        else:
+            apply_transform(
+                input_image=str(input_path),
+                reference_image=template_path,
+                transform=rigid_path,
+                output_image=str(output_path),
+                interpolation=interpolation,
+            )
 
         logger.info("AC-PC aligned image written to: %s", output_path)
         return str(output_path)
