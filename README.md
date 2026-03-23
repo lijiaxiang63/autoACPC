@@ -17,6 +17,11 @@ This produces an output image whose origin is at AC-PC, with the same anatomical
 - **ANTs** — `antsRegistration` and `antsApplyTransforms` must be on your `PATH`
 - **TemplateFlow** templates are auto-downloaded on first use (or supply your own with `--template-path`)
 
+## Tested environment
+
+- Tested on macOS
+- Tested with ANTs 2.6.5
+
 ## Installation
 
 ### Standalone binary
