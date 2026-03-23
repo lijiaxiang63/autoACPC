@@ -1,11 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for autoacpc standalone binary."""
 
+from PyInstaller.utils.hooks import collect_data_files
+
+templateflow_data = collect_data_files("templateflow")
+
 a = Analysis(
     ["entry.py"],
     pathex=["src"],
     binaries=[],
-    datas=[],
+    datas=templateflow_data,
     hiddenimports=[
         "nibabel",
         "nibabel.nifti1",
