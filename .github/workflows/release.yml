@@ -35,9 +35,13 @@ jobs:
       - name: Build binary
         run: python build.py
 
-      - name: Smoke test
+      - name: Smoke test (Unix)
+        if: runner.os != 'Windows'
         run: dist/autoacpc/autoacpc --help
-        shell: bash
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: dist\autoacpc\autoacpc.exe --help
 
       - uses: actions/upload-artifact@v4
         with:

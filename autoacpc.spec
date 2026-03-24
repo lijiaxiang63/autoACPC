@@ -6,7 +6,11 @@ Build with: uv run python build.py  (or: uv run python build.py clean)
 Output: dist/autoacpc-<OS>-<arch>.tar.gz (.zip on Windows)
 """
 
+import sys
 from PyInstaller.utils.hooks import collect_data_files
+
+# strip corrupts Windows DLLs (python3xx.dll) — only enable on Unix
+do_strip = sys.platform != "win32"
 
 templateflow_data = collect_data_files("templateflow")
 
@@ -109,7 +113,7 @@ exe = EXE(
     name="autoacpc",
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
+    strip=do_strip,
     upx=True,
     console=True,
 )
@@ -118,7 +122,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    strip=True,
+    strip=do_strip,
     upx=True,
     upx_exclude=[],
     name="autoacpc",
