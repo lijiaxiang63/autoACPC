@@ -23,6 +23,10 @@ uv run ruff check src/ tests/
 
 # Format
 uv run ruff format src/ tests/
+
+# Build standalone binary (works on macOS, Linux, Windows)
+uv run python build.py        # outputs dist/autoacpc-<OS>-<arch>.tar.gz (.zip on Windows)
+uv run python build.py clean  # remove build artifacts
 ```
 
 ## Architecture

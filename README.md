@@ -26,12 +26,15 @@ This produces an output image whose origin is at AC-PC, with the same anatomical
 
 ### Standalone binary
 
-Download the latest binary for your platform from [GitHub Releases](../../releases/latest). No Python installation required.
+Download the latest archive for your platform from [GitHub Releases](../../releases/latest). No Python installation required.
 
 ```bash
 # macOS / Linux
-chmod +x autoacpc-*
-./autoacpc-macos-arm64 input.nii.gz output_acpc.nii.gz
+tar -xzf autoacpc-Darwin-arm64.tar.gz   # or autoacpc-Linux-x86_64.tar.gz
+./autoacpc/autoacpc input.nii.gz output_acpc.nii.gz
+
+# Windows — extract autoacpc-Windows-AMD64.zip, then:
+autoacpc\autoacpc.exe input.nii.gz output_acpc.nii.gz
 ```
 
 ### From source
@@ -121,7 +124,6 @@ uv run pytest
 ## Building standalone binary locally
 
 ```bash
-pip install pyinstaller
-pyinstaller autoacpc.spec
-./dist/autoacpc --help
+uv run python build.py        # outputs dist/autoacpc-<OS>-<arch>.tar.gz (.zip on Windows)
+uv run python build.py clean  # remove build artifacts
 ```
