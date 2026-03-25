@@ -2,14 +2,37 @@
 
 import nibabel as nb
 import numpy as np
-import SimpleITK as sitk
 
 from autoacpc.registration import (
     ACPC_REGISTRATION_SETTINGS,
     FAST_REGISTRATION_SETTINGS,
     apply_transform_to_header,
     build_ants_command,
+    write_itk_affine_tfm,
 )
+
+
+def _write_euler_transform(path, rotation_matrix=None, translation=(0, 0, 0), center=(0, 0, 0)):
+    """Write an ITK rigid transform as an AffineTransform text file."""
+    if rotation_matrix is None:
+        rotation_matrix = np.eye(3)
+    write_itk_affine_tfm(
+        path,
+        matrix=rotation_matrix,
+        translation=np.array(translation, dtype=float),
+        center=np.array(center, dtype=float),
+    )
+
+
+def _euler_rotation_matrix(ax, ay, az):
+    """Build a rotation matrix from Euler angles (ITK ZXY convention)."""
+    cx, sx = np.cos(ax), np.sin(ax)
+    cy, sy = np.cos(ay), np.sin(ay)
+    cz, sz = np.cos(az), np.sin(az)
+    Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+    Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
+    Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
+    return Rz @ Rx @ Ry
 
 
 def test_build_ants_command_contains_expected_flags():
@@ -75,10 +98,9 @@ def test_apply_transform_to_header_identity(tmp_path):
     input_path = str(tmp_path / "input.nii.gz")
     nb.save(img, input_path)
 
-    # Write an identity Euler3DTransform
-    rigid = sitk.Euler3DTransform()
-    transform_path = str(tmp_path / "identity.mat")
-    sitk.WriteTransform(rigid, transform_path)
+    # Write an identity transform
+    transform_path = str(tmp_path / "identity.tfm")
+    _write_euler_transform(transform_path)
 
     output_path = str(tmp_path / "output.nii.gz")
     apply_transform_to_header(input_path, transform_path, output_path)
@@ -96,13 +118,10 @@ def test_apply_transform_to_header_translation(tmp_path):
     input_path = str(tmp_path / "input.nii.gz")
     nb.save(img, input_path)
 
-    # ITK Euler3DTransform with translation in LPS
-    rigid = sitk.Euler3DTransform()
     # ITK translation is in LPS: (L, P, S)
     # After LPS→RAS conversion: (-L, -P, S) = (R, A, S)
-    rigid.SetTranslation((5.0, 10.0, 15.0))
-    transform_path = str(tmp_path / "translate.mat")
-    sitk.WriteTransform(rigid, transform_path)
+    transform_path = str(tmp_path / "translate.tfm")
+    _write_euler_transform(transform_path, translation=(5.0, 10.0, 15.0))
 
     output_path = str(tmp_path / "output.nii.gz")
     apply_transform_to_header(input_path, transform_path, output_path)
@@ -128,23 +147,31 @@ def test_apply_transform_to_header_matches_point_transform(tmp_path):
     input_path = str(tmp_path / "input_oblique.nii.gz")
     nb.save(img, input_path)
 
-    rigid = sitk.Euler3DTransform()
-    rigid.SetCenter((11.0, -7.0, 5.0))
-    rigid.SetRotation(0.2, -0.1, 0.3)
-    rigid.SetTranslation((4.0, -2.0, 1.0))
-    transform_path = str(tmp_path / "rigid.mat")
-    sitk.WriteTransform(rigid, transform_path)
+    # Build the same rigid transform as before
+    ax, ay, az = 0.2, -0.1, 0.3
+    R = _euler_rotation_matrix(ax, ay, az)
+    center = np.array([11.0, -7.0, 5.0])
+    translation = np.array([4.0, -2.0, 1.0])
+
+    transform_path = str(tmp_path / "rigid.tfm")
+    _write_euler_transform(transform_path, rotation_matrix=R,
+                           translation=translation, center=center)
 
     output_path = str(tmp_path / "output_oblique.nii.gz")
     apply_transform_to_header(input_path, transform_path, output_path)
 
     out = nb.load(output_path)
     lps_to_ras = np.diag([-1.0, -1.0, 1.0])
+
+    # ITK transform: y = R*(x - c) + c + t
+    def itk_transform_point(pt_lps):
+        return R @ (pt_lps - center) + center + translation
+
     for ijk in ((0, 0, 0), (1, 2, 1), (2, 1, 2)):
         voxel = np.array([*ijk, 1.0])
         original_world_ras = (affine @ voxel)[:3]
         original_world_lps = lps_to_ras @ original_world_ras
-        expected_world_lps = np.array(rigid.TransformPoint(tuple(original_world_lps)))
+        expected_world_lps = itk_transform_point(original_world_lps)
         expected_world_ras = lps_to_ras @ expected_world_lps
         observed_world_ras = (out.affine @ voxel)[:3]
         np.testing.assert_allclose(observed_world_ras, expected_world_ras, atol=1e-6)
@@ -158,9 +185,8 @@ def test_apply_transform_to_header_preserves_scaled_intensities(tmp_path):
     input_path = str(tmp_path / "input_scaled.nii.gz")
     nb.save(img, input_path)
 
-    rigid = sitk.Euler3DTransform()
-    transform_path = str(tmp_path / "identity.mat")
-    sitk.WriteTransform(rigid, transform_path)
+    transform_path = str(tmp_path / "identity.tfm")
+    _write_euler_transform(transform_path)
 
     output_path = str(tmp_path / "output_scaled.nii.gz")
     apply_transform_to_header(input_path, transform_path, output_path)

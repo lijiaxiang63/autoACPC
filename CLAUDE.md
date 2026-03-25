@@ -34,14 +34,14 @@ uv run python build.py clean  # remove build artifacts
 The pipeline has three stages, each in its own module:
 
 1. **`template.py`** — Fetches standard template + brain mask from TemplateFlow (skipped when a local template path is provided)
-2. **`registration.py`** — Runs ANTs registration (Similarity + Affine), then decomposes the affine into a 6-DOF rigid transform using SimpleITK + dipy geometry. Also provides `apply_transform_to_header` for header-only mode (modifies NIfTI affine instead of resampling).
+2. **`registration.py`** — Runs ANTs registration (Similarity + Affine), then decomposes the affine into a 6-DOF rigid transform via SVD polar decomposition (pure numpy). Reads/writes ITK transform files (text `.tfm` and MATLAB-v4 binary `.mat`) without external dependencies. Also provides `apply_transform_to_header` for header-only mode (modifies NIfTI affine instead of resampling).
 3. **`pipeline.py`** — Orchestrates the full flow: fetch template → register → extract rigid → apply transform (resampling or header-only)
 
 **`cli.py`** is a thin Click wrapper around `pipeline.acpc_align()`.
 
 ### Key algorithm detail
 
-The rigid extraction (`affine_to_rigid`) decomposes the ANTs affine matrix using `dipy.core.geometry.decompose_matrix` to get Euler angles, rebuilds a pure rotation matrix, and creates a `sitk.Euler3DTransform` with only rotation + translation. This is the same approach as QSIPrep's `itk_affine_to_rigid` in `qsiprep/interfaces/itk.py`.
+The rigid extraction (`affine_to_rigid`) extracts the closest proper rotation from the ANTs affine 3×3 matrix via SVD polar decomposition (`R = U @ Vt`), discarding scale and shear. The rigid transform is written as an ITK text `.tfm` file (AffineTransform_double_3_3 with an orthonormal matrix). No SimpleITK or dipy dependency is needed.
 
 ## External dependencies
 

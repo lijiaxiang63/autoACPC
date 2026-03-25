@@ -14,39 +14,11 @@ do_strip = sys.platform != "win32"
 
 templateflow_data = collect_data_files("templateflow")
 
-# Heavy modules pulled in transitively (via dipy/scipy) but never used at runtime.
-# dipy.core.geometry is the only dipy module we need; it does not import scipy.
+# Heavy modules not needed at runtime.
 excludes = [
-    # Unused dipy subpackages (only dipy.core.geometry is needed)
-    "dipy.align",
-    "dipy.data",
-    "dipy.denoise",
-    "dipy.direction",
-    "dipy.io",
-    "dipy.nn",
-    "dipy.reconst",
-    "dipy.segment",
-    "dipy.sims",
-    "dipy.tracking",
-    "dipy.viz",
-    "dipy.workflows",
-    # Unused scipy subpackages
-    "scipy.stats",
-    "scipy.optimize",
-    "scipy.special",
-    "scipy.sparse",
-    "scipy.spatial",
-    "scipy.signal",
-    "scipy.interpolate",
-    "scipy.integrate",
-    "scipy.fft",
-    "scipy.fftpack",
-    "scipy.io",
-    "scipy.cluster",
-    "scipy.constants",
-    "scipy.datasets",
-    "scipy.misc",
-    "scipy.odr",
+    "dipy",
+    "SimpleITK",
+    "scipy",
     # Testing / dev tools
     "pytest",
     "IPython",
@@ -88,10 +60,6 @@ a = Analysis(
         "nibabel.nifti2",
         "nibabel.freesurfer",
         "numpy",
-        "SimpleITK",
-        "dipy",
-        "dipy.core",
-        "dipy.core.geometry",
         "click",
         "templateflow",
         "templateflow.api",

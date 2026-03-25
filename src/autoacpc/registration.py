@@ -12,8 +12,6 @@ from pathlib import Path
 
 import nibabel as nb
 import numpy as np
-import SimpleITK as sitk
-from dipy.core import geometry as geom
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +49,170 @@ FAST_REGISTRATION_SETTINGS = {
     "sampling_percentage": [0.2, 0.05],
     "shrink_factors": [[8, 4], [4, 2]],
 }
+
+
+# ---------------------------------------------------------------------------
+# Pure-numpy ITK transform I/O
+# ---------------------------------------------------------------------------
+
+
+def _read_itk_text_transform(path: str) -> dict:
+    """Read an ITK text transform file (.tfm / .mat with text header)."""
+    transform_type = None
+    parameters = None
+    fixed_parameters = None
+
+    with open(path, encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                if line.startswith("Transform:"):
+                    transform_type = line.split(":", 1)[1].strip()
+                continue
+            if line.startswith("Transform:"):
+                transform_type = line.split(":", 1)[1].strip()
+            elif line.startswith("Parameters:"):
+                parameters = np.fromstring(line.split(":", 1)[1], sep=" ")
+            elif line.startswith("FixedParameters:"):
+                fixed_parameters = np.fromstring(line.split(":", 1)[1], sep=" ")
+
+    if transform_type is None or parameters is None:
+        raise ValueError(f"Invalid ITK transform file: {path}")
+
+    if transform_type.startswith(("AffineTransform_", "MatrixOffsetTransformBase_")):
+        A = parameters[:9].reshape((3, 3), order="C")
+        t = parameters[9:12]
+        c = fixed_parameters[:3] if fixed_parameters is not None else np.zeros(3)
+        return {"matrix": A, "translation": t, "center": c}
+
+    if transform_type.startswith("Euler3DTransform_"):
+        angles = parameters[:3]
+        t = parameters[3:6]
+        c = fixed_parameters[:3] if fixed_parameters is not None else np.zeros(3)
+        compute_zyx = (
+            bool(round(fixed_parameters[3]))
+            if fixed_parameters is not None and len(fixed_parameters) > 3
+            else False
+        )
+        # Build rotation matrix from Euler angles
+        ax, ay, az = angles
+        cx, sx = np.cos(ax), np.sin(ax)
+        cy, sy = np.cos(ay), np.sin(ay)
+        cz, sz = np.cos(az), np.sin(az)
+        Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+        Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
+        Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
+        if compute_zyx:
+            A = Rz @ Ry @ Rx
+        else:
+            A = Rz @ Rx @ Ry
+        return {"matrix": A, "translation": t, "center": c}
+
+    raise NotImplementedError(f"Unsupported transform type: {transform_type}")
+
+
+def _read_ants_mat4(path: str) -> dict:
+    """Read an ANTs MATLAB-v4 binary .mat transform file."""
+
+    def _parse(endian: str) -> dict[str, np.ndarray]:
+        variables: dict[str, np.ndarray] = {}
+        with open(path, "rb") as f:
+            while True:
+                hdr = f.read(20)
+                if not hdr:
+                    return variables
+                if len(hdr) != 20:
+                    raise ValueError("truncated MAT v4 header")
+                mopt, mrows, ncols, imagf, namelen = np.frombuffer(
+                    hdr, dtype=endian + "i4", count=5
+                )
+                mopt, mrows, ncols, imagf, namelen = (
+                    int(mopt),
+                    int(mrows),
+                    int(ncols),
+                    int(imagf),
+                    int(namelen),
+                )
+                if imagf != 0 or mrows <= 0 or ncols <= 0 or namelen <= 0 or namelen > 256:
+                    raise ValueError("bad MAT v4 header")
+                name = f.read(namelen)
+                if len(name) != namelen:
+                    raise ValueError("truncated MAT v4 name")
+                name = name.rstrip(b"\x00").decode("ascii")
+                p = (mopt % 100) // 10
+                dtype_map = {
+                    0: endian + "f8",
+                    1: endian + "f4",
+                    2: endian + "i4",
+                    3: endian + "i2",
+                    4: endian + "u2",
+                    5: endian + "u1",
+                }
+                if p not in dtype_map:
+                    raise ValueError(f"unsupported MAT v4 dtype code {p}")
+                count = mrows * ncols
+                data = np.fromfile(f, dtype=np.dtype(dtype_map[p]), count=count)
+                if data.size != count:
+                    raise ValueError("truncated MAT v4 data")
+                variables[name] = data.reshape((mrows, ncols), order="F")
+        return variables
+
+    try:
+        variables = _parse("<")
+    except Exception:
+        variables = _parse(">")
+
+    affine_key = next(
+        k
+        for k in variables
+        if k.startswith(("AffineTransform_", "MatrixOffsetTransformBase_"))
+    )
+    fixed_key = next(k for k in variables if k.lower().startswith("fixed"))
+    params = np.asarray(variables[affine_key]).ravel(order="F").astype(float)
+    center = np.asarray(variables[fixed_key]).ravel(order="F").astype(float)
+    A = params[:9].reshape((3, 3), order="C")
+    t = params[9:12]
+    return {"matrix": A, "translation": t, "center": center[:3]}
+
+
+def read_itk_transform(path: str) -> dict:
+    """Read an ITK linear transform from either text or MATLAB-v4 binary."""
+    with open(path, "rb") as f:
+        head = f.read(32)
+    if head.startswith(b"#Insight Transform File"):
+        return _read_itk_text_transform(path)
+    return _read_ants_mat4(path)
+
+
+def write_itk_affine_tfm(path: str, matrix: np.ndarray, translation: np.ndarray,
+                         center: np.ndarray) -> None:
+    """Write an ITK AffineTransform text file (.tfm)."""
+    params = np.concatenate([
+        np.asarray(matrix, dtype=float).reshape(9, order="C"),
+        np.asarray(translation, dtype=float).reshape(3),
+    ])
+    fixed = np.asarray(center, dtype=float).reshape(3)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("#Insight Transform File V1.0\n")
+        f.write("#Transform 0\n")
+        f.write("Transform: AffineTransform_double_3_3\n")
+        f.write("Parameters: " + " ".join(f"{x:.17g}" for x in params) + "\n")
+        f.write("FixedParameters: " + " ".join(f"{x:.17g}" for x in fixed) + "\n")
+
+
+def _closest_rotation(A: np.ndarray) -> np.ndarray:
+    """Extract the closest proper rotation matrix from A via SVD."""
+    U, _, Vt = np.linalg.svd(A)
+    R = U @ Vt
+    if np.linalg.det(R) < 0:
+        U[:, -1] *= -1.0
+        R = U @ Vt
+    return R
+
+
+# ---------------------------------------------------------------------------
+# ANTs command building & execution
+# ---------------------------------------------------------------------------
 
 
 def build_ants_command(
@@ -153,35 +315,25 @@ def run_registration(
 def affine_to_rigid(transform_file: str, output_dir: str) -> tuple[str, str]:
     """Extract 6-DOF rigid component from an ITK affine transform.
 
-    Based on qsiprep's itk_affine_to_rigid function. Decomposes the affine
-    matrix to extract only rotation and translation, discarding scaling/shear.
+    Decomposes the affine matrix via SVD to extract the closest proper
+    rotation, discarding scaling and shear.
 
     Returns:
         Tuple of (rigid_transform_path, rigid_inverse_transform_path).
     """
     output_dir = Path(output_dir)
-    rigid_path = str(output_dir / "rigid_acpc.mat")
-    inverse_path = str(output_dir / "rigid_acpc_inverse.mat")
+    rigid_path = str(output_dir / "rigid_acpc.tfm")
+    inverse_path = str(output_dir / "rigid_acpc_inverse.tfm")
 
-    raw_transform = sitk.ReadTransform(transform_file)
-    aff_transform = sitk.AffineTransform(3)
-    aff_transform.SetFixedParameters(raw_transform.GetFixedParameters())
-    aff_transform.SetParameters(raw_transform.GetParameters())
+    tx = read_itk_transform(transform_file)
+    A = tx["matrix"]
+    t = tx["translation"]
+    c = tx["center"]
 
-    # Decompose affine to extract rotation angles
-    full_matrix = np.eye(4)
-    full_matrix[:3, :3] = np.array(aff_transform.GetMatrix()).reshape((3, 3), order="C")
-    _, _, angles, _, _ = geom.decompose_matrix(full_matrix)
-    rot_mat = geom.euler_matrix(angles[0], angles[1], angles[2])
+    R = _closest_rotation(A)
 
-    # Build rigid transform (rotation + translation only)
-    rigid = sitk.Euler3DTransform()
-    rigid.SetCenter(aff_transform.GetCenter())
-    rigid.SetTranslation(aff_transform.GetTranslation())
-    rigid.SetMatrix(tuple(rot_mat[:3, :3].flatten(order="C")))
-
-    sitk.WriteTransform(rigid, rigid_path)
-    sitk.WriteTransform(rigid.GetInverse(), inverse_path)
+    write_itk_affine_tfm(rigid_path, R, t, c)
+    write_itk_affine_tfm(inverse_path, R.T, -R.T @ t, c)
 
     logger.info("Rigid transform extracted: %s", rigid_path)
     return rigid_path, inverse_path
@@ -200,27 +352,22 @@ def apply_transform_to_header(
 
     Args:
         input_image: Path to input NIfTI image.
-        inverse_transform: Path to the *inverse* rigid ITK transform (.mat).
+        inverse_transform: Path to the *inverse* rigid ITK transform.
         output_image: Path for the output image with modified header.
 
     Returns:
         Path to the output image.
     """
-    # Load the inverse rigid transform (maps input space → template space)
-    raw = sitk.ReadTransform(inverse_transform)
-    rigid = sitk.Euler3DTransform()
-    rigid.SetFixedParameters(raw.GetFixedParameters())
-    rigid.SetParameters(raw.GetParameters())
+    tx = read_itk_transform(inverse_transform)
+    A = tx["matrix"]
+    c = tx["center"]
+    t = tx["translation"]
 
-    # Build 4x4 matrix in ITK (LPS) space
-    rot_3x3 = np.array(rigid.GetMatrix()).reshape((3, 3), order="C")
-    center = np.array(rigid.GetFixedParameters()[:3])
-    translation = np.array(rigid.GetTranslation())
-    # ITK applies: y = R*(x - center) + center + t  →  y = R*x + (center - R*center + t)
-    offset = center - rot_3x3 @ center + translation
+    # ITK applies: y = A*(x - c) + c + t  →  offset = c - A*c + t
+    offset = c - A @ c + t
 
     lps_matrix = np.eye(4)
-    lps_matrix[:3, :3] = rot_3x3
+    lps_matrix[:3, :3] = A
     lps_matrix[:3, 3] = offset
 
     # Convert LPS → RAS: flip x and y axes
@@ -231,9 +378,7 @@ def apply_transform_to_header(
     img = nb.load(str(input_image))
     new_affine = ras_matrix @ img.affine
 
-    # Preserve on-disk voxel storage and NIfTI scaling exactly. Using
-    # np.asarray(img.dataobj) would materialize scaled values and trigger
-    # re-quantization on save for images with scl_slope/scl_inter.
+    # Preserve on-disk voxel storage and NIfTI scaling exactly.
     header = img.header.copy()
     dataobj = img.dataobj
     if hasattr(dataobj, "get_unscaled"):
