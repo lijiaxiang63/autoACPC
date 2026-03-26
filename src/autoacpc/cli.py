@@ -1,7 +1,7 @@
 """Command-line interface for autoacpc."""
 
 import logging
-import sys
+from pathlib import Path
 
 import click
 
@@ -10,8 +10,8 @@ from .template import DEFAULT_TEMPLATE
 
 
 @click.command()
-@click.argument("input_image", type=click.Path(exists=True))
-@click.argument("output_image", type=click.Path())
+@click.argument("input_image", type=click.Path(exists=True, path_type=Path))
+@click.argument("output_image", type=click.Path(path_type=Path))
 @click.option(
     "--template",
     default=DEFAULT_TEMPLATE,
@@ -33,20 +33,22 @@ from .template import DEFAULT_TEMPLATE
     help="Interpolation method for resampling.",
 )
 @click.option("--fast", is_flag=True, help="Use fast (less accurate) registration.")
-@click.option("--work-dir", type=click.Path(), help="Working directory for intermediate files.")
+@click.option(
+    "--work-dir", type=click.Path(path_type=Path), help="Working directory for intermediate files."
+)
 @click.option(
     "--save-transform",
-    type=click.Path(),
+    type=click.Path(path_type=Path),
     help="Save the rigid transform used for the output image to this path.",
 )
 @click.option(
     "--template-path",
-    type=click.Path(exists=True),
+    type=click.Path(exists=True, path_type=Path),
     help="Path to a local template image. Bypasses TemplateFlow download.",
 )
 @click.option(
     "--template-mask",
-    type=click.Path(exists=True),
+    type=click.Path(exists=True, path_type=Path),
     help="Path to a local brain mask. Only used with --template-path.",
 )
 @click.option(
@@ -56,16 +58,16 @@ from .template import DEFAULT_TEMPLATE
 )
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging.")
 def main(
-    input_image: str,
-    output_image: str,
+    input_image: Path,
+    output_image: Path,
     template: str,
     modality: str,
     interpolation: str,
     fast: bool,
-    work_dir: str | None,
-    save_transform: str | None,
-    template_path: str | None,
-    template_mask: str | None,
+    work_dir: Path | None,
+    save_transform: Path | None,
+    template_path: Path | None,
+    template_mask: Path | None,
     header_only: bool,
     verbose: bool,
 ) -> None:
@@ -99,12 +101,8 @@ def main(
             template_mask=template_mask,
             header_only=header_only,
         )
-    except FileNotFoundError as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
-    except RuntimeError as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+    except (FileNotFoundError, RuntimeError) as e:
+        raise click.ClickException(str(e))
 
 
 if __name__ == "__main__":

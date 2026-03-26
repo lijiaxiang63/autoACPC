@@ -136,12 +136,14 @@ def test_apply_transform_to_header_translation(tmp_path):
 
 def test_apply_transform_to_header_matches_point_transform(tmp_path):
     """Header affine should match the rigid point transform in world space."""
-    affine = np.array([
-        [0.0, -2.0, 0.0, 10.0],
-        [1.5, 0.0, 0.0, 20.0],
-        [0.0, 0.0, 3.0, 30.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ])
+    affine = np.array(
+        [
+            [0.0, -2.0, 0.0, 10.0],
+            [1.5, 0.0, 0.0, 20.0],
+            [0.0, 0.0, 3.0, 30.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    )
     data = np.zeros((3, 3, 3), dtype=np.float32)
     img = nb.Nifti1Image(data, affine)
     input_path = str(tmp_path / "input_oblique.nii.gz")
@@ -154,8 +156,9 @@ def test_apply_transform_to_header_matches_point_transform(tmp_path):
     translation = np.array([4.0, -2.0, 1.0])
 
     transform_path = str(tmp_path / "rigid.tfm")
-    _write_euler_transform(transform_path, rotation_matrix=R,
-                           translation=translation, center=center)
+    _write_euler_transform(
+        transform_path, rotation_matrix=R, translation=translation, center=center
+    )
 
     output_path = str(tmp_path / "output_oblique.nii.gz")
     apply_transform_to_header(input_path, transform_path, output_path)

@@ -1,6 +1,7 @@
 """Main AC-PC alignment pipeline."""
 
 import logging
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -18,16 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 def acpc_align(
-    input_image: str,
-    output_image: str,
+    input_image: str | Path,
+    output_image: str | Path,
     template: str = DEFAULT_TEMPLATE,
     modality: str = "T1w",
     interpolation: str = "LanczosWindowedSinc",
     fast: bool = False,
-    work_dir: str | None = None,
-    save_transform: str | None = None,
-    template_path: str | None = None,
-    template_mask: str | None = None,
+    work_dir: str | Path | None = None,
+    save_transform: str | Path | None = None,
+    template_path: str | Path | None = None,
+    template_mask: str | Path | None = None,
     header_only: bool = False,
 ) -> str:
     """Run the full AC-PC alignment pipeline.
@@ -113,8 +114,6 @@ def acpc_align(
         rigid_path, inverse_path = affine_to_rigid(affine_path, work_dir)
 
         if save_transform:
-            import shutil
-
             transform_to_save = inverse_path if header_only else rigid_path
             shutil.copy(transform_to_save, save_transform)
             logger.info("Transform saved to: %s", save_transform)
@@ -140,6 +139,4 @@ def acpc_align(
 
     finally:
         if cleanup:
-            import shutil
-
             shutil.rmtree(work_dir, ignore_errors=True)

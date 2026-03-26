@@ -23,7 +23,7 @@ def get_template(
 
     cohort = None
     if "+" in template_name:
-        template_name, cohort = template_name.split("+")
+        template_name, cohort = template_name.split("+", 1)
 
     template_path = get_tf(
         template_name,
